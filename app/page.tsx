@@ -73,7 +73,7 @@ export default function Home() {
   const [idUser, setIdUser] = useState(1);
   const [mostrarArqueo, setMostrarArqueo] = useState<boolean>(false);
   const [cashboxes, setCashboxes] = useState<any[]>([]);
-  const [cashboxHoyId, setCashboxHoyId] = useState(null);
+  const [cashboxHoyId, setCashboxHoyId] = useState<number | null>(null);
   const [mostrarCierre, setMostrarCierre] = useState<boolean>(false);
 
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
@@ -406,28 +406,49 @@ export default function Home() {
   // ---------------------------------------------------------------------------
   // Al cargar la página
   // ---------------------------------------------------------------------------
-
+  const [cashboxStateHoy, setCashboxStateHoy] = useState<
+    "CARGANDO" | "SIN_CAJA" | "ABIERTA" | "CERRADA"
+  >("CARGANDO");
+  const esCargando = cashboxStateHoy === "CARGANDO";
+  const esAbierta = cashboxStateHoy === "ABIERTA";
+  const esCerrada = cashboxStateHoy === "CERRADA";
   const fetchCashboxes = async () => {
     try {
+      setCashboxStateHoy("CARGANDO");
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const isoDate = today.toISOString();
 
       const data = await apiGet(`/cashbox/get?place=${place}&date=${isoDate}`);
 
-      let openCashbox: any = null;
+      let cashboxHoy: any = null;
 
       if (Array.isArray(data)) {
-        openCashbox = data.find((c: any) => c?.state === "OPEN") || null;
+        cashboxHoy = data[0] || null;
       } else if (data && typeof data === "object") {
-        openCashbox = data.state === "OPEN" ? data : null;
+        cashboxHoy = data;
       }
-      setCashboxes(openCashbox ? [openCashbox] : []);
 
-      setCashboxHoyId(openCashbox ? openCashbox.id_cashbox : null);
+      if (!cashboxHoy) {
+        setCashboxStateHoy("SIN_CAJA");
+        setCashboxHoyId(null);
+        setCashboxes([]);
+        return;
+      }
+
+      setCashboxHoyId(cashboxHoy.id_cashbox);
+
+      if (cashboxHoy.state === "OPEN") {
+        setCashboxStateHoy("ABIERTA");
+        setCashboxes([cashboxHoy]);
+      } else if (cashboxHoy.state === "CLOSED") {
+        setCashboxStateHoy("CERRADA");
+        setCashboxes([]);
+      }
 
     } catch (error) {
       console.error("Error al traer cashboxes:", error);
+      setCashboxStateHoy("SIN_CAJA");
       setCashboxHoyId(null);
       setCashboxes([]);
     }
@@ -672,10 +693,22 @@ export default function Home() {
       }
     }
 
-    await Promise.allSettled(operaciones);
+    const resultados = await Promise.allSettled(operaciones);
+    const huboErrores = resultados.some(
+      (r) => r.status === 'rejected'
+    );
+
+    if (!huboErrores) {
+      alert('Arqueo guardado correctamente');
+    } else {
+      console.error('Algunas operaciones fallaron:', resultados);
+      alert('El arqueo se guardó parcialmente. Revisa la consola.');
+    }
+
     setArqueoExtras([]);
     await cargarMovimientos();
     await actualizarCashMovimientosMap();
+
   };
 
 
@@ -691,6 +724,8 @@ export default function Home() {
         diferencia={diferencia}
         responsable={responsableDia}
         externos={externos}
+        cashboxHoyId={cashboxHoyId}
+        fetchCashboxes={fetchCashboxes}
       />
 
       <ConfirmModal
@@ -774,21 +809,35 @@ export default function Home() {
         <div className="p-4 flex-shrink-0 bg-brand-blue border-t border-blue-800 z-10">
           <button
             onClick={() => {
-              if (cashboxesAbiertos) {
+              if (esAbierta) {
                 setMostrarCierre(true);
-              } else {
+              } else if (cashboxStateHoy === "SIN_CAJA") {
                 abrirDia();
               }
             }}
+            disabled={esCerrada || esCargando}
             className={`w-full font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2
-              ${cashboxesAbiertos
-                ? "bg-red-600 hover:bg-red-700 text-white"
-                : "bg-green-600 hover:bg-green-700 text-white"
+              ${esCargando
+                ? "bg-gray-300 text-gray-600 cursor-wait"
+                : esAbierta
+                  ? "bg-red-600 hover:bg-red-700 text-white"
+                  : esCerrada
+                    ? "bg-gray-400 text-white cursor-not-allowed"
+                    : "bg-green-600 hover:bg-green-700 text-white"
               }`}
           >
-            <FontAwesomeIcon icon={faLock} /> {cashboxesAbiertos ? "Cerrar día" : "Abrir día"}
+            <FontAwesomeIcon icon={faLock} />
+            {esCargando
+              ? "Cargando..."
+              : esAbierta
+                ? "Cerrar día"
+                : esCerrada
+                  ? "Día cerrado"
+                  : "Abrir día"}
           </button>
+
         </div>
+
       </aside>
 
       {/* CONTENIDO PRINCIPAL */}
