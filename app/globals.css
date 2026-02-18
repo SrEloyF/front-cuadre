@@ -24,3 +24,88 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.bg-brand-blue {
+  background-color: #003B73;
+}
+
+.bg-brand-orange {
+  background-color: #FF7F11;
+}
+
+.text-brand-blue {
+  color: #003B73;
+}
+
+.text-brand-orange {
+  color: #FF7F11;
+}
+
+.border-brand-blue {
+  border-color: #003B73;
+}
+
+.border-brand-orange {
+  border-color: #FF7F11;
+}
+
+.btn-primary {
+  background-color: #003B73;
+  color: white;
+  transition: all 0.3s;
+}
+
+.btn-primary:hover {
+  background-color: #002850;
+  transform: translateY(-1px);
+}
+
+.btn-accent {
+  background-color: #FF7F11;
+  color: white;
+  transition: all 0.3s;
+}
+
+.btn-accent:hover {
+  background-color: #e06900;
+  transform: translateY(-1px);
+}
+
+.input-zoom:focus {
+  transform: scale(1.02);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.input-zoom {
+  transition: all 0.2s ease-in-out;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #003B73;
+  border-radius: 4px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
