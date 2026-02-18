@@ -31,10 +31,8 @@ type Movimiento = {
   movement_datum?: any;
 };
 
-// --- CONSTANTES INICIALES ---
-const TAGS_INICIALES_ENTRADA = ['VENTA CELULAR', 'VENTA ACCESORIO', 'SERVICIO TÉCNICO'];
-const TAGS_INICIALES_SALIDA = ['PAGO LUZ', 'ALMUERZO', 'MOVILIDAD'];
-const ARQUEO_DATA_INICIAL = { b200: 0, b100: 0, b50: 0, b20: 0, b10: 0, m5: 0, m2: 0, m1: 0, m050: 0, m020: 0, m010: 0 };
+// --- CONSTANTES INICIALES --
+//const ARQUEO_DATA_INICIAL = { b200: 0, b100: 0, b50: 0, b20: 0, b10: 0, m5: 0, m2: 0, m1: 0, m050: 0, m020: 0, m010: 0 };
 
 // --- COMPONENTE ---
 export default function Home() {
@@ -50,6 +48,7 @@ export default function Home() {
   const [arqueoExtras, setArqueoExtras] = useState<any[]>(() => {
     return [];
   });
+  const [voucherExistentes, setVoucherExistentes] = useState<any[]>([]);
 
   // ---------------------------------------------------------------------------
   // Estados del formulario principal
@@ -66,7 +65,6 @@ export default function Home() {
   // ---------------------------------------------------------------------------
   const [extraDesc, setExtraDesc] = useState<string>('');
   const [extraMonto, setExtraMonto] = useState<string>('');
-  const [extraTipo, setExtraTipo] = useState<'salida' | 'entrada'>('entrada'); // 'salida' (vale/gasto) o 'entrada' (documento)
 
   // ---------------------------------------------------------------------------
   // Estados de UI / modales
@@ -81,7 +79,7 @@ export default function Home() {
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [showTagsModal, setShowTagsModal] = useState<boolean>(false);
   const [showExternoModal, setShowExternoModal] = useState<boolean>(false);
-  
+
   const [fechaHora, setFechaHora] = useState(() => {
     const now = new Date();
     // Formato YYYY-MM-DDTHH:mm para datetime-local
@@ -108,12 +106,72 @@ export default function Home() {
   // ---------------------------------------------------------------------------
   // Estados de etiquetas y arqueo físico
   // ---------------------------------------------------------------------------
-  const [tagsEntrada, setTagsEntrada] = useState<string[]>(() => TAGS_INICIALES_ENTRADA);
-  const [tagsSalida, setTagsSalida] = useState<string[]>(() => TAGS_INICIALES_SALIDA);
+  interface Tag {
+    id_description: number;
+    text: string;
+    link: number;
+  }
 
-  const [arqueoData, setArqueoData] = useState<typeof ARQUEO_DATA_INICIAL>(() => ARQUEO_DATA_INICIAL);
+  const [tags, setTags] = useState<Tag[]>([]);
 
-  const etiquetasVisibles = tipo === 'entrada' ? tagsEntrada : tagsSalida;
+  useEffect(() => {
+    cargarTags();
+  }, [place]);
+
+  const cargarTags = async () => {
+    try {
+      const data = await apiGet(`/descriptions/list?place=${place}`);
+      setTags(data || []);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const DENOM_VALORES: Record<string, number> = {
+    b200: 200,
+    b100: 100,
+    b50: 50,
+    b20: 20,
+    b10: 10,
+    m5: 5,
+    m2: 2,
+    m1: 1,
+    m050: 0.5,
+  };
+  type DenomKey = keyof typeof DENOM_VALORES;
+
+  const [arqueoData, setArqueoData] = useState<Record<DenomKey, number | ''>>(
+    Object.keys(DENOM_VALORES).reduce((acc, key) => {
+      acc[key as DenomKey] = '';
+      return acc;
+    }, {} as Record<DenomKey, number | ''>)
+  );
+
+  const PAQUETES = [
+    { key: 'p5', label: 'S/5 x 20', unit: 5 },
+    { key: 'p2', label: 'S/2 x 20', unit: 2 },
+    { key: 'p1', label: 'S/1 x 20', unit: 1 },
+    { key: 'p050', label: 'S/0.50 x 20', unit: 0.5 },
+    { key: 'p020', label: 'S/0.20 x 20', unit: 0.2 },
+  ] as const;
+
+  type PaqueteKey = typeof PAQUETES[number]['key'];
+
+  const [paquetesData, setPaquetesData] = useState<Record<PaqueteKey, number | ''>>(
+    PAQUETES.reduce((acc, p) => {
+      acc[p.key] = '';
+      return acc;
+    }, {} as Record<PaqueteKey, number | ''>)
+  );
+
+  const [paquetesExistentes, setPaquetesExistentes] = useState<Record<PaqueteKey, any[]>>(
+    PAQUETES.reduce((acc, p) => {
+      acc[p.key] = [];
+      return acc;
+    }, {} as Record<PaqueteKey, any[]>)
+  );
+
+  //const etiquetasVisibles = tipo === 'entrada' ? tagsEntrada : tagsSalida;
 
 
   const [movimientosFiltrados, setMovimientosFiltrados] = useState<Movimiento[]>([]);
@@ -274,17 +332,16 @@ export default function Home() {
   };
 
   // Arqueo extra (vales / documentos)
-  const agregarArqueoExtra = (e: { preventDefault: () => void; }) => {
+  const agregarArqueoExtra = (e: any) => {
     e.preventDefault();
-    if (!extraDesc || !extraMonto) return;
+    if (!extraMonto) return;
+
     const nuevoExtra = {
-      id: Date.now(),
-      descripcion: extraDesc.toUpperCase(),
-      monto: parseFloat(extraMonto),
-      tipo: extraTipo
+      id: crypto.randomUUID(),
+      monto: parseFloat(extraMonto)
     };
-    // agregar a arreglo de extras:
-    // setArqueoExtras([...arqueoExtras, nuevoExtra]);
+
+    setArqueoExtras(prev => [...prev, nuevoExtra]);
     setExtraDesc('');
     setExtraMonto('');
   };
@@ -308,15 +365,41 @@ export default function Home() {
   }, [movimientosFiltrados, externos]);
 
   const totalArqueoFisico = useMemo(() => {
-    const totalBilletes =
-      (arqueoData.b200 * 200) + (arqueoData.b100 * 100) + (arqueoData.b50 * 50) +
-      (arqueoData.b20 * 20) + (arqueoData.b10 * 10) + (arqueoData.m5 * 5) +
-      (arqueoData.m2 * 2) + (arqueoData.m1 * 1) + (arqueoData.m050 * 0.50) +
-      (arqueoData.m020 * 0.20) + (arqueoData.m010 * 0.10);
+    const getNum = (val: number | '') => typeof val === 'number' ? val : 0;
 
-    const totalExtras = arqueoExtras.reduce((acc: number, item) => acc + Number(item.monto || 0), 0);
-    return totalBilletes + totalExtras;
-  }, [arqueoData, arqueoExtras]);
+    const totalBilletes =
+      (getNum(arqueoData.b200) * 200) +
+      (getNum(arqueoData.b100) * 100) +
+      (getNum(arqueoData.b50) * 50) +
+      (getNum(arqueoData.b20) * 20) +
+      (getNum(arqueoData.b10) * 10) +
+      (getNum(arqueoData.m5) * 5) +
+      (getNum(arqueoData.m2) * 2) +
+      (getNum(arqueoData.m1) * 1) +
+      (getNum(arqueoData.m050) * 0.50) +
+      (getNum(arqueoData.m020) * 0.20) +
+      (getNum(arqueoData.m010) * 0.10);
+
+    const totalExtrasNuevos = arqueoExtras.reduce(
+      (acc: number, item) => acc + Number(item.monto || 0),
+      0
+    );
+
+    const totalExtrasExistentes = voucherExistentes.reduce(
+      (acc: number, item) => acc + Number(item.value || 0),
+      0
+    );
+
+    const totalPaquetes = PAQUETES.reduce((acc, p) => {
+      const cantidad = Number(paquetesData[p.key]) || 0;
+      return acc + cantidad * p.unit * 20;
+    }, 0);
+
+    return totalBilletes + totalExtrasNuevos + totalExtrasExistentes + totalPaquetes;
+
+  }, [arqueoData, arqueoExtras, voucherExistentes, paquetesData]);
+
+
 
   const diferencia = totalArqueoFisico - totales.balance;
 
@@ -350,7 +433,6 @@ export default function Home() {
     }
   };
 
-
   useEffect(() => {
     fetchCashboxes();
   }, [place]);
@@ -358,39 +440,27 @@ export default function Home() {
   const cashboxesAbiertos = cashboxes.some(c => c.state === "OPEN");
 
   useEffect(() => {
-  const obtenerMovimientos = async () => {
-    if (!cashboxHoyId) {
-      setMovimientosFiltrados([]);
-      return;
-    }
+    const obtenerMovimientos = async () => {
+      if (!cashboxHoyId) {
+        setMovimientosFiltrados([]);
+        return;
+      }
 
-    try {
-      const data = await apiGet(`/movements/list?cashbox=${cashboxHoyId}`);
-      console.log("Datos recibidos de movimientos:", data);
+      try {
+        const data = await apiGet(`/movements/list?cashbox=${cashboxHoyId}`);
+        //console.log("Datos recibidos de movimientos:", data);
 
-      const movimientosArray = Array.isArray(data) ? data : [];
-      setMovimientosFiltrados(movimientosArray);
+        const movimientosArray = Array.isArray(data) ? data : [];
+        setMovimientosFiltrados(movimientosArray);
 
-      // Chequeo de nombres
-      movimientosArray.forEach((m, i) => {
-        if (!m.movement_datum) {
-          console.warn(`Movimiento ${i} sin movement_datum`, m);
-        } else if (!m.movement_datum.user) {
-          console.warn(`Movimiento ${i} sin user`, m);
-        } else if (!m.movement_datum.user.name) {
-          console.warn(`Movimiento ${i} sin user.name`, m);
-        } else {
-          console.log(`Movimiento ${i} tiene user.name:`, m.movement_datum.user.name);
-        }
-      });
-    } catch (err) {
-      console.error("Error al obtener movimientos:", err);
-      setMovimientosFiltrados([]);
-    }
-  };
+      } catch (err) {
+        console.error("Error al obtener movimientos:", err);
+        setMovimientosFiltrados([]);
+      }
+    };
 
-  obtenerMovimientos();
-}, [cashboxHoyId]);
+    obtenerMovimientos();
+  }, [cashboxHoyId]);
 
 
 
@@ -420,9 +490,195 @@ export default function Home() {
     { label: 'S/ 2', key: 'm2' },
     { label: 'S/ 1', key: 'm1' },
     { label: '0.50', key: 'm050' },
-    { label: '0.20', key: 'm020' },
-    { label: '0.10', key: 'm010' },
   ];
+
+  const inicializarArqueo = () => {
+    const obj: any = {};
+    Object.keys(DENOM_VALORES).forEach(k => obj[k] = '');
+    return obj;
+  };
+
+  const [cashMovimientosMap, setCashMovimientosMap] = useState<Record<string, any[]>>({});
+
+  useEffect(() => {
+    if (!cashboxHoyId) return;
+    cargarMovimientos();
+  }, [cashboxHoyId]);
+
+  // Actualizar cashMovimientosMap cada vez que cargarMovimientos obtiene nuevos datos
+  const actualizarCashMovimientosMap = async () => {
+    const res = await apiGet(`/accounting/list?cashbox=${cashboxHoyId}`);
+    if (!Array.isArray(res)) return;
+    const cashMovs = res.filter((m: any) => m.type === 'CASH');
+    const map: Record<string, any[]> = {};
+    Object.keys(DENOM_VALORES).forEach((key) => {
+      map[key] = cashMovs.filter((m: any) => Number(m.value) === DENOM_VALORES[key]);
+    });
+    setCashMovimientosMap(map);
+  };
+
+  useEffect(() => {
+    if (!cashboxHoyId) return;
+    actualizarCashMovimientosMap();
+  }, [cashboxHoyId]);
+
+  const cargarMovimientos = async () => {
+    const res = await apiGet(`/accounting/list?cashbox=${cashboxHoyId}`);
+    if (!Array.isArray(res)) return;
+
+    // ---------------- VOUCHERS ----------------
+    const vouchers = res.filter((m: any) => m.type === 'VOUCHER');
+    console.log("vouchers: ", vouchers);
+
+    setVoucherExistentes(vouchers);
+
+    // ---------------- PAQUETES ----------------
+    const paquetes = res.filter((m: any) => m.type === 'PACKAGE');
+
+    const map: any = {};
+    PAQUETES.forEach(p => map[p.key] = []);
+
+    paquetes.forEach((m: any) => {
+      const key = PAQUETES.find(p => p.unit * 20 === Number(m.value))?.key;
+      if (!key) return;
+      map[key].push(m);
+    });
+
+    setPaquetesExistentes(map);
+
+    const nuevosPaquetes = { ...paquetesData };
+    PAQUETES.forEach(p => {
+      nuevosPaquetes[p.key] =
+        map[p.key]?.reduce((acc: number, m: any) => acc + Number(m.quantity), 0) || '';
+    });
+    setPaquetesData(nuevosPaquetes);
+
+    // ---------------- ARQUEO (CASH) ----------------
+    const cashMovs = res.filter((m: any) => m.type === 'CASH');
+    const nuevosArqueo: Record<DenomKey, number | ''> = { ...arqueoData };
+    Object.keys(DENOM_VALORES).forEach((key) => {
+      const mov = cashMovs.find((m: any) => Number(m.value) === DENOM_VALORES[key]);
+      nuevosArqueo[key as DenomKey] = mov ? Number(mov.quantity) : '';
+    });
+    setArqueoData(nuevosArqueo);
+  };
+
+  const handleGuardarArqueo = async () => {
+    if (!cashboxHoyId) {
+      console.warn('No existe cashboxHoyId');
+      return;
+    }
+
+    // Refrescar cashMovimientosMap antes de operar
+    await actualizarCashMovimientosMap();
+
+    const operaciones: Promise<any>[] = [];
+
+    // =====================
+    // CASH
+    // =====================
+    for (const key of Object.keys(DENOM_VALORES) as DenomKey[]) {
+      const nuevaCantidad = arqueoData[key] === '' ? 0 : Number(arqueoData[key]);
+      const existentes = cashMovimientosMap[key] || [];
+      if (existentes.length === 0) {
+        if (nuevaCantidad > 0) {
+          operaciones.push(
+            apiPost('/accounting/create', {
+              id_cashbox: cashboxHoyId,
+              type: 'CASH',
+              value: DENOM_VALORES[key],
+              quantity: nuevaCantidad
+            })
+          );
+        }
+      } else {
+        const primero = existentes[0];
+        const otros = existentes.slice(1);
+        if (nuevaCantidad > 0) {
+          if (Number(primero.quantity) !== nuevaCantidad) {
+            operaciones.push(
+              apiPut(`/accounting/edit/${primero.id_accounting}`, {
+                id_cashbox: cashboxHoyId,
+                type: 'CASH',
+                value: DENOM_VALORES[key],
+                quantity: nuevaCantidad
+              })
+            );
+          }
+          otros.forEach((mov: any) => {
+            operaciones.push(apiDelete(`/accounting/delete/${mov.id_accounting}`));
+          });
+        } else {
+          existentes.forEach((mov: any) => {
+            operaciones.push(apiDelete(`/accounting/delete/${mov.id_accounting}`));
+          });
+        }
+      }
+    }
+
+    // =====================
+    // VOUCHERS
+    // =====================
+    arqueoExtras.forEach((v) => {
+      operaciones.push(
+        apiPost('/accounting/create', {
+          id_cashbox: cashboxHoyId,
+          type: 'VOUCHER',
+          value: v.monto,
+          quantity: 1
+        })
+      );
+    });
+
+    // =====================
+    // PACKAGES
+    // =====================
+    for (const p of PAQUETES) {
+      const nuevaCantidad = paquetesData[p.key] === '' ? 0 : Number(paquetesData[p.key]);
+      const existentes = paquetesExistentes[p.key] || [];
+      if (existentes.length === 0) {
+        if (nuevaCantidad > 0) {
+          operaciones.push(
+            apiPost('/accounting/create', {
+              id_cashbox: cashboxHoyId,
+              type: 'PACKAGE',
+              value: p.unit * 20,
+              quantity: nuevaCantidad
+            })
+          );
+        }
+      } else {
+        const primero = existentes[0];
+        const otros = existentes.slice(1);
+        if (nuevaCantidad > 0) {
+          if (Number(primero.quantity) !== nuevaCantidad) {
+            operaciones.push(
+              apiPut(`/accounting/edit/${primero.id_accounting}`, {
+                id_cashbox: cashboxHoyId,
+                type: 'PACKAGE',
+                value: p.unit * 20,
+                quantity: nuevaCantidad
+              })
+            );
+          }
+          otros.forEach((mov: any) => {
+            operaciones.push(apiDelete(`/accounting/delete/${mov.id_accounting}`));
+          });
+        } else {
+          existentes.forEach((mov: any) => {
+            operaciones.push(apiDelete(`/accounting/delete/${mov.id_accounting}`));
+          });
+        }
+      }
+    }
+
+    await Promise.allSettled(operaciones);
+    setArqueoExtras([]);
+    await cargarMovimientos();
+    await actualizarCashMovimientosMap();
+  };
+
+
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
@@ -447,9 +703,9 @@ export default function Home() {
       <TagsConfigModal
         isOpen={showTagsModal}
         onClose={() => setShowTagsModal(false)}
-        tipo={tipo}
-        tags={tipo === 'entrada' ? tagsEntrada : tagsSalida}
-        onUpdateTags={tipo === 'entrada' ? setTagsEntrada : setTagsSalida}
+        place={place}
+        tags={tags}
+        onRefresh={cargarTags}
       />
 
       <ExternoModal
@@ -512,45 +768,6 @@ export default function Home() {
                 <span className="font-bold">{formatearMoneda(totales.totalExternos)}</span>
               </div>
             </div>
-
-            <div className="mt-6 pt-4 border-t border-blue-800">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-xs font-bold text-blue-300 uppercase flex items-center gap-2">
-                  <FontAwesomeIcon icon={faWallet} />
-                  Elementos Externos
-                </h3>
-                <button
-                  onClick={() => setShowExternoModal(true)}
-                  className="text-xs border border-blue-400 rounded px-2 py-1 hover:bg-blue-800 transition"
-                >
-                  <FontAwesomeIcon icon={faPlus} /> Nuevo
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                {externos.length === 0 ? (
-                  <p className="text-center text-xs text-blue-500 italic py-2">Sin registros externos.</p>
-                ) : (
-                  externos.map((ex: any) => (
-                    <div key={ex.id} className="bg-blue-900/40 p-2 rounded border border-blue-800/50 flex flex-col group relative">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-bold text-gray-200">{ex.nombre}</span>
-                        <span className="text-sm font-bold text-brand-orange">{formatearMoneda(ex.monto)}</span>
-                      </div>
-
-                      <div className="absolute right-0 top-0 bottom-0 bg-blue-900/90 px-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity rounded-r">
-                        <button onClick={() => openEditExterno(ex)} className="text-blue-300 hover:text-white">
-                          <FontAwesomeIcon icon={faPen} />
-                        </button>
-                        <button onClick={() => handleDeleteExterno(ex.id)} className="text-red-400 hover:text-red-300">
-                          <FontAwesomeIcon icon={faTrash} />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
           </div>
         </div>
 
@@ -591,18 +808,22 @@ export default function Home() {
         {/* ARQUEO */}
         {mostrarArqueo && (
           <section className="bg-white rounded-xl shadow-lg border-t-4 border-brand-orange p-6 mb-8 animate-fade-in">
+
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
               {denominaciones.map((d) => (
                 <div key={d.key} className="bg-gray-50 p-2 rounded border border-gray-200">
-                  <label className="block text-xs font-bold text-gray-500 mb-1">{d.label}</label>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">
+                    {d.label}
+                  </label>
+
                   <input
                     type="number"
                     min={0}
                     className="w-full border rounded px-2 py-2 text-right font-bold text-lg text-brand-blue"
                     value={
-                      (arqueoData as any)[d.key] === 0
+                      arqueoData[d.key] === 0
                         ? ''
-                        : (arqueoData as any)[d.key] ?? ''
+                        : arqueoData[d.key] ?? ''
                     }
                     onChange={(e) => {
                       const value = e.target.value;
@@ -624,72 +845,145 @@ export default function Home() {
                 Documentos y Vales en Caja
               </h4>
 
-              <div className="flex flex-col md:flex-row gap-2 mb-3">
-                <input
-                  type="text"
-                  className="flex-1 border rounded px-3 py-2 uppercase text-sm"
-                  placeholder="Descripción (ej: Voucher Visa, Recibo Luz)"
-                  value={extraDesc}
-                  onChange={(e) => setExtraDesc(e.target.value.toUpperCase())}
-                />
+              <div className="flex flex-col gap-2 mb-3">
+                <p className="text-sm">Añadir Voucher (Ej: Kasnet)</p>
 
-                <div className="relative w-full md:w-32">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">S/</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="w-full border rounded pl-6 pr-2 py-2 text-sm font-bold"
-                    placeholder="0.00"
-                    value={extraMonto}
-                    onChange={(e) => setExtraMonto(e.target.value)}
-                  />
+                <div className="flex flex-col md:flex-row gap-2">
+                  <div className="relative w-full md:w-32">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
+                      S/
+                    </span>
+
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="w-full border rounded pl-6 pr-2 py-2 text-sm font-bold"
+                      placeholder="0.00"
+                      value={extraMonto}
+                      onChange={(e) => setExtraMonto(e.target.value)}
+                    />
+                  </div>
+
+                  <button
+                    onClick={agregarArqueoExtra}
+                    className="bg-brand-blue text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-800 transition"
+                  >
+                    <FontAwesomeIcon icon={faPlus} />
+                  </button>
                 </div>
-
-                <select
-                  className="border rounded px-2 py-2 text-sm bg-white"
-                  value={extraTipo}
-                  onChange={(e) => setExtraTipo(e.target.value as 'salida' | 'entrada')}
-                >
-                  <option value="entrada">Entrada (Ingreso)</option>
-                  <option value="salida">Salida (Gasto)</option>
-                </select>
-
-                <button onClick={agregarArqueoExtra} className="bg-brand-blue text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-800 transition">
-                  <FontAwesomeIcon icon={faPlus} />
-                </button>
               </div>
 
-              {arqueoExtras.length > 0 && (
-                <div className="space-y-1 bg-gray-50 p-2 rounded border border-gray-100 mb-4">
+              {(voucherExistentes.length > 0 || arqueoExtras.length > 0) && (
+                <div className="flex flex-wrap gap-3 bg-white p-3 rounded-lg border-2 border-gray-300 mb-4">
+                  {/* Vouchers existentes en la BD */}
+                  {voucherExistentes.map((item: any) => (
+                    <div
+                      key={item.id_accounting}
+                      className="flex items-center justify-between gap-4 px-4 py-2 bg-gray-50 border-2 border-gray-400 rounded-md shadow-sm"
+                    >
+                      <span className="font-bold text-gray-800 text-sm">
+                        {formatearMoneda(item.value)}
+                      </span>
+                      <button
+                        onClick={async () => {
+                          await apiDelete(`/accounting/delete/${item.id_accounting}`);
+                          await cargarMovimientos();
+                        }}
+                        className="text-red-500 hover:text-red-700 transition"
+                      >
+                        <FontAwesomeIcon icon={faTrash} />
+                      </button>
+                    </div>
+                  ))}
+                  {/* Vouchers nuevos (no guardados aún) */}
                   {arqueoExtras.map((item: any) => (
-                    <div key={item.id} className="flex justify-between items-center text-sm border-b border-gray-200 last:border-0 pb-1 last:pb-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${item.tipo === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {item.tipo}
-                        </span>
-                        <span className="text-gray-700">{item.descripcion}</span>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-gray-800">{formatearMoneda(item.monto)}</span>
-                        <button onClick={() => eliminarArqueoExtra(item.id)} className="text-red-400 hover:text-red-600">
-                          <FontAwesomeIcon icon={faTrash} />
-                        </button>
-                      </div>
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between gap-4 px-4 py-2 bg-gray-50 border-2 border-gray-400 rounded-md shadow-sm"
+                    >
+                      <span className="font-bold text-gray-800 text-sm">
+                        {formatearMoneda(item.monto)}
+                      </span>
+                      <button
+                        onClick={() => eliminarArqueoExtra(item.id)}
+                        className="text-red-500 hover:text-red-700 transition"
+                      >
+                        <FontAwesomeIcon icon={faTrash} />
+                      </button>
                     </div>
                   ))}
                 </div>
               )}
+
             </div>
 
-            <div className="flex justify-end">
-              <div className={`text-right px-6 py-3 rounded-lg ${diferencia === 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                <p className="text-xs font-bold uppercase">Diferencia Final</p>
-                <p className="text-2xl font-bold">{diferencia > 0 ? '+' : ''}{formatearMoneda(diferencia)}</p>
+            {/* PAQUETES DE MONEDAS */}
+            <div className="border-t border-gray-200 pt-4 mb-4">
+              <h4 className="font-bold text-gray-700 mb-3">
+                Paquetes de Monedas (20 unidades)
+              </h4>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+
+                {PAQUETES.map((p) => (
+                  <div key={p.key} className="bg-gray-50 p-3 rounded border border-gray-200">
+
+                    <label className="block text-xs font-bold text-gray-600 mb-1">
+                      {p.label}
+                    </label>
+
+                    <input
+                      type="number"
+                      min={0}
+                      className="w-full border rounded px-2 py-2 text-right font-bold"
+                      value={paquetesData[p.key] === 0 ? '' : paquetesData[p.key] ?? ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setPaquetesData({
+                          ...paquetesData,
+                          [p.key]: value === '' ? '' : Number(value)
+                        });
+                      }}
+                      placeholder="0"
+                    />
+
+                  </div>
+                ))}
+
               </div>
+            </div>
+
+            <div className="flex justify-end items-center gap-4">
+
+              <div
+                className={`text-right px-6 py-3 rounded-lg ${diferencia === 0
+                  ? 'bg-green-100 text-green-800'
+                  : diferencia > 0
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-red-100 text-red-800'
+                  }`}
+              >
+                <p className="text-xs font-bold uppercase">
+                  Diferencia Final
+                </p>
+                <p className="text-2xl font-bold">
+                  {diferencia > 0 ? '+' : ''}
+                  {formatearMoneda(diferencia)}
+                </p>
+              </div>
+
+
+              <button
+                onClick={handleGuardarArqueo}
+                className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition-colors"
+              >
+                Guardar arqueo
+              </button>
+
             </div>
           </section>
         )}
+
 
         {/* GRID: FORM + LISTADO */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -754,18 +1048,26 @@ export default function Home() {
                 />
 
                 <div className="flex flex-wrap gap-2 mt-2 animate-fade-in">
-                  {etiquetasVisibles.map((tag: string, index: number) => (
-                    <button
-                      key={`${tag}-${index}`}
-                      type="button"
-                      onClick={() => setDescripcion(tag)}
-                      className={`px-2 py-1 text-xs font-bold rounded border transition ${tipo === 'entrada' ? 'bg-blue-50 text-brand-blue border-blue-100 hover:bg-blue-100' : 'bg-red-50 text-red-700 border-red-100 hover:bg-red-100'}`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
+                  {tags
+                    .filter(tag => tag.link === 1)
+                    .map((tag) => (
+                      <button
+                        key={tag.id_description}
+                        type="button"
+                        onClick={() => setDescripcion(tag.text)}
+                        className="px-2 py-1 text-xs font-bold rounded border transition bg-blue-50 text-brand-blue border-blue-100 hover:bg-blue-100"
+                      >
+                        {tag.text}
+                      </button>
+                    ))}
 
-                  {etiquetasVisibles.length === 0 && <span className="text-xs text-gray-400 italic">Sin etiquetas. ¡Añade algunas!</span>}
+                  {tags.length === 0 && <span className="text-xs text-gray-400 italic">Sin etiquetas. ¡Añade algunas!</span>}
+                  {tags.filter(t => t.link === 1).length === 0 && (
+                    <span className="text-xs text-gray-400 italic">
+                      No hay etiquetas fijadas.
+                    </span>
+                  )}
+
                 </div>
               </div>
 
@@ -872,7 +1174,7 @@ export default function Home() {
                     </tr>
                   ) : (
                     movimientosFiltrados.map((m: Movimiento) => (
-                      
+
                       <tr key={m.id_movement} className={`hover:bg-blue-50/50 transition duration-150 ${idEdicion === m.id_movement ? 'bg-orange-50' : ''}`}>
                         <td className="p-3">
                           <div className="flex items-center gap-2">
