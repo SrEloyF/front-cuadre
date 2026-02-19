@@ -409,6 +409,7 @@ export default function Home() {
   const [cashboxStateHoy, setCashboxStateHoy] = useState<
     "CARGANDO" | "SIN_CAJA" | "ABIERTA" | "CERRADA"
   >("CARGANDO");
+  const puedeMostrarMovimientos = cashboxStateHoy === "ABIERTA";
   const esCargando = cashboxStateHoy === "CARGANDO";
   const esAbierta = cashboxStateHoy === "ABIERTA";
   const esCerrada = cashboxStateHoy === "CERRADA";
@@ -1159,17 +1160,23 @@ export default function Home() {
 
                 <button
                   type="submit"
-                  disabled={isDisabled}
-                  className={`flex-1 py-4 rounded-xl font-bold text-lg shadow-xl flex justify-center items-center gap-2 transition-all ${isDisabled
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : idEdicion
-                      ? 'bg-brand-orange text-white hover:bg-orange-600'
-                      : 'btn-primary'
-                    }`}
+                  disabled={isDisabled || !puedeMostrarMovimientos}
+                  className={`flex-1 py-4 rounded-xl font-bold text-lg shadow-xl flex justify-center items-center gap-2 transition-all ${
+                    isDisabled || !puedeMostrarMovimientos
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : idEdicion
+                        ? 'bg-brand-orange text-white hover:bg-orange-600'
+                        : 'btn-primary'
+                  }`}
                 >
                   <FontAwesomeIcon icon={idEdicion ? faRotate : faFloppyDisk} />
-                  {idEdicion ? 'ACTUALIZAR' : 'GUARDAR'}
+                  {!puedeMostrarMovimientos
+                    ? "Día no disponible"
+                    : idEdicion
+                      ? "ACTUALIZAR"
+                      : "GUARDAR"}
                 </button>
+
               </div>
             </form>
           </section>
@@ -1214,9 +1221,25 @@ export default function Home() {
                 </thead>
 
                 <tbody className="text-sm text-gray-700 divide-y divide-gray-100">
-                  {movimientosFiltrados.length === 0 ? (
-                    <tr key="sin-movimientos">
-                      <td colSpan={4} className="p-10 text-center text-gray-400">
+                  {
+                    esCargando ? (
+                      <tr>
+                        <td colSpan={4} className="p-10 text-center text-gray-400">
+                          Cargando movimientos...
+                        </td>
+                      </tr>
+                    ) : !puedeMostrarMovimientos ? (
+                      <tr>
+                        <td colSpan={4} className="p-10 text-center text-gray-400">
+                          {cashboxStateHoy === "CERRADA"
+                            ? "El día está cerrado"
+                            : "Debe abrir el día para registrar movimientos"}
+                        </td>
+                      </tr>
+                    ) :
+                      movimientosFiltrados.length === 0 ? (
+                        <tr key="sin-movimientos">
+                          <td colSpan={4} className="p-10 text-center text-gray-400">
                         <FontAwesomeIcon icon={faFolderOpen} className="text-4xl mb-2 opacity-30" />
                         <p>Sin movimientos</p>
                       </td>
