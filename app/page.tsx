@@ -419,6 +419,8 @@ export default function Home() {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const isoDate = today.toISOString();
+      console.log("isoDate: ", isoDate);
+
 
       const data = await apiGet(`/cashbox/get?place=${place}&date=${isoDate}`);
 
@@ -755,10 +757,43 @@ export default function Home() {
       <aside className="w-full md:w-72 bg-brand-blue text-white flex flex-col shadow-2xl z-20 overflow-hidden">
         <div className="p-6 text-center border-b border-blue-800 relative overflow-hidden flex-shrink-0">
           <div className="absolute top-0 left-0 w-full h-1 bg-brand-orange" />
-          <FontAwesomeIcon icon={faCashRegister} className="text-4xl text-brand-orange mb-3 animate-pulse" />
+          <FontAwesomeIcon
+            icon={faCashRegister}
+            className="text-4xl text-brand-orange mb-3 animate-pulse"
+          />
           <h1 className="text-2xl font-bold tracking-tight">Caja Tienda</h1>
           <p className="text-blue-300 text-xs mt-1">Gestión de Efectivo</p>
+
+          <div className="mt-4 flex justify-center">
+            <input
+              type="date"
+              value={fechaHora.split("T")[0]}
+              onChange={(e) => {
+                const nuevaFecha = e.target.value;
+                const horaActual = fechaHora.split("T")[1];
+                setFechaHora(`${nuevaFecha}T${horaActual}`);
+              }}
+              className="
+              bg-blue-900/40
+              border border-blue-700
+              text-white
+              text-sm
+              rounded-lg
+              px-3 py-2
+              focus:outline-none
+              focus:ring-2
+              focus:ring-brand-orange
+              focus:border-brand-orange
+              transition-all
+              duration-200
+              hover:border-brand-orange
+              shadow-md
+              backdrop-blur-sm
+            "
+            />
+          </div>
         </div>
+
 
         <div className="bg-blue-900/50 p-4 border-b border-blue-800 flex-shrink-0">
           <label className="text-xs text-brand-orange font-bold uppercase block mb-1">
@@ -1161,13 +1196,12 @@ export default function Home() {
                 <button
                   type="submit"
                   disabled={isDisabled || !puedeMostrarMovimientos}
-                  className={`flex-1 py-4 rounded-xl font-bold text-lg shadow-xl flex justify-center items-center gap-2 transition-all ${
-                    isDisabled || !puedeMostrarMovimientos
+                  className={`flex-1 py-4 rounded-xl font-bold text-lg shadow-xl flex justify-center items-center gap-2 transition-all ${isDisabled || !puedeMostrarMovimientos
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : idEdicion
                         ? 'bg-brand-orange text-white hover:bg-orange-600'
                         : 'btn-primary'
-                  }`}
+                    }`}
                 >
                   <FontAwesomeIcon icon={idEdicion ? faRotate : faFloppyDisk} />
                   {!puedeMostrarMovimientos
@@ -1240,49 +1274,49 @@ export default function Home() {
                       movimientosFiltrados.length === 0 ? (
                         <tr key="sin-movimientos">
                           <td colSpan={4} className="p-10 text-center text-gray-400">
-                        <FontAwesomeIcon icon={faFolderOpen} className="text-4xl mb-2 opacity-30" />
-                        <p>Sin movimientos</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    movimientosFiltrados.map((m: Movimiento) => (
+                            <FontAwesomeIcon icon={faFolderOpen} className="text-4xl mb-2 opacity-30" />
+                            <p>Sin movimientos</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        movimientosFiltrados.map((m: Movimiento) => (
 
-                      <tr key={m.id_movement} className={`hover:bg-blue-50/50 transition duration-150 ${idEdicion === m.id_movement ? 'bg-orange-50' : ''}`}>
-                        <td className="p-3">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${m.type === 'ENTRY' ? 'bg-green-500' : 'bg-red-500'}`} />
-                            <span className="font-bold text-gray-800 text-base">{m.description}</span>
-                          </div>
+                          <tr key={m.id_movement} className={`hover:bg-blue-50/50 transition duration-150 ${idEdicion === m.id_movement ? 'bg-orange-50' : ''}`}>
+                            <td className="p-3">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${m.type === 'ENTRY' ? 'bg-green-500' : 'bg-red-500'}`} />
+                                <span className="font-bold text-gray-800 text-base">{m.description}</span>
+                              </div>
 
-                          <div className="text-xs text-gray-500 ml-4 flex gap-2 mt-1">
-                            <span>{formatearFecha(m.date)}</span>
-                            <span className="text-gray-300">|</span>
-                            <span className="text-blue-600 font-medium">{m.movement_datum?.user?.name ?? 'Sin usuario'}</span>
-                          </div>
-                        </td>
+                              <div className="text-xs text-gray-500 ml-4 flex gap-2 mt-1">
+                                <span>{formatearFecha(m.date)}</span>
+                                <span className="text-gray-300">|</span>
+                                <span className="text-blue-600 font-medium">{m.movement_datum?.user?.name ?? 'Sin usuario'}</span>
+                              </div>
+                            </td>
 
-                        <td className={`p-3 text-right font-bold text-lg ${m.type === 'ENTRY' ? 'text-green-700' : 'text-red-700'}`}>
-                          {m.type === 'EXIT' ? '-' : '+'}{formatearMoneda(m.quantity)}
-                        </td>
+                            <td className={`p-3 text-right font-bold text-lg ${m.type === 'ENTRY' ? 'text-green-700' : 'text-red-700'}`}>
+                              {m.type === 'EXIT' ? '-' : '+'}{formatearMoneda(m.quantity)}
+                            </td>
 
-                        <td className="p-3 text-center hidden sm:table-cell">
-                          {m.comition > 0 && <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs font-bold">{formatearMoneda(m.comition)}</span>}
-                        </td>
+                            <td className="p-3 text-center hidden sm:table-cell">
+                              {m.comition > 0 && <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs font-bold">{formatearMoneda(m.comition)}</span>}
+                            </td>
 
-                        <td className="p-3 text-center">
-                          <div className="flex justify-center gap-2">
-                            <button onClick={() => iniciarEdicion(m)} className="text-blue-500 hover:text-blue-700 p-2 bg-blue-50 hover:bg-blue-100 rounded-lg transition" title="Editar">
-                              <FontAwesomeIcon icon={faPen} />
-                            </button>
+                            <td className="p-3 text-center">
+                              <div className="flex justify-center gap-2">
+                                <button onClick={() => iniciarEdicion(m)} className="text-blue-500 hover:text-blue-700 p-2 bg-blue-50 hover:bg-blue-100 rounded-lg transition" title="Editar">
+                                  <FontAwesomeIcon icon={faPen} />
+                                </button>
 
-                            <button onClick={() => solicitarEliminacion(m.id_movement)} className="text-red-400 hover:text-red-600 p-2 bg-red-50 hover:bg-red-100 rounded-lg transition" title="Eliminar">
-                              <FontAwesomeIcon icon={faTrashCan} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                                <button onClick={() => solicitarEliminacion(m.id_movement)} className="text-red-400 hover:text-red-600 p-2 bg-red-50 hover:bg-red-100 rounded-lg transition" title="Eliminar">
+                                  <FontAwesomeIcon icon={faTrashCan} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                 </tbody>
               </table>
             </div>
